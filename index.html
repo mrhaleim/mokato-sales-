@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5a3420">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>MOKATO — إدارة المبيعات والأرباح</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#faf6f1;--card:#fff;--tx:#2b1d14;--mut:#7a6a5d;--br:#e5dbd0;--pri:#5a3420;--acc:#c07a3a;--ok:#2e7d4f;--bad:#b3392f}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1511;--card:#271e18;--tx:#f3e9de;--mut:#a8998a;--br:#3a2e26;--pri:#d9a066;--acc:#c07a3a}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,"Segoe UI",Arial,sans-serif;font-size:15px}
+header{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--pri);color:#fff;flex-wrap:wrap}
+header b{font-size:20px;letter-spacing:2px}header select,header button{font:inherit}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px;background:var(--card);border-bottom:1px solid var(--br)}
+nav button{white-space:nowrap;border:0;background:none;color:var(--tx);padding:8px 12px;border-radius:8px;font:inherit;cursor:pointer}nav button.on{background:var(--acc);color:#fff}
+main{padding:12px;max-width:1100px;margin:auto}
+.card{background:var(--card);border:1px solid var(--br);border-radius:12px;padding:12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k{background:var(--card);border:1px solid var(--br);border-radius:12px;padding:10px}.k small{color:var(--mut)}.k div{font-size:19px;font-weight:700;margin-top:4px}
+input,select,button{font:inherit;color:var(--tx)}input,select{background:var(--bg);border:1px solid var(--br);border-radius:8px;padding:8px;width:100%}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:9px 14px;cursor:pointer}.btn.s{background:var(--card);color:var(--tx);border:1px solid var(--br)}.btn.d{background:var(--bad)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:560px}th,td{padding:7px 8px;border-bottom:1px solid var(--br);text-align:right;white-space:nowrap}th{color:var(--mut);font-weight:600}
+td input,td select{min-width:70px}.pos{color:var(--ok)}.neg{color:var(--bad)}
+.bar{display:flex;align-items:flex-end;gap:3px;height:110px}.bar i{flex:1;background:var(--acc);border-radius:3px 3px 0 0;min-height:2px}.bar i.p{background:var(--ok)}
+.lab{display:flex;gap:3px;font-size:10px;color:var(--mut)}.lab span{flex:1;text-align:center}
+h3{margin:4px 0 10px}.mut{color:var(--mut)}
+#print{display:none}
+@media print{body>*:not(#print){display:none!important}#print{display:block;color:#000;background:#fff;padding:16px}#print table{min-width:0}#print th,#print td{color:#000}}
+</style>
+</head>
+<body>
+<header><b>MOKATO</b>
+<span>المستخدم: <select id="role" onchange="setRole(this.value)"><option value="m">المدير</option><option value="s">موظف</option></select></span></header>
+<nav id="nav"></nav><main id="app"></main><div id="print"></div>
+<script>
+const $=s=>document.querySelector(s);
+const R=n=>Math.round(n*1e4)/1e4,F=n=>(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const PACK=20,KEY='mokato_db_v1';
+const seed=[["سوبر A","فاتح",430,540],["سوبر A","وسط",430,540],["سوبر A","غامق",430,540],["سوبر B","فاتح",380,0],["سوبر B","وسط",380,0],["توليفة موكاتو","فاتح",480,680],["توليفة موكاتو","وسط",480,680],["سوبر محوج A","فاتح",515,640],["سوبر محوج A","وسط",520,640],["سوبر محوج A","غامق",525,640],["قهوة فرنسية بندق","—",470,580],["إسبريسو سوبر كريما 70/30","—",550,650]];
+let db;try{db=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+if(!db||!db.items){const t=new Date().toISOString();db={items:seed.map((s,i)=>({id:i+1,name:s[0],roast:s[1],cost:s[2],price:s[3],unit:"كجم",active:true,created:t,updated:t,stock:0})),invoices:[],log:[],next:1,pin:"1234",staffEdit:false}}
+let role='m',view='dash',cur=null,rep={p:'month',from:'',to:''},flt={q:'',item:'',roast:'',pay:'',d1:'',d2:''};
+const isM=()=>role==='m';
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){alert('تعذر الحفظ')}}
+function logit(type,no,detail){db.log.unshift({t:new Date().toISOString(),type,no,detail});save()}
+const today=()=>new Date().toISOString().slice(0,10);
+const item=id=>db.items.find(i=>i.id==id);
+const iname=i=>i?i.name+(i.roast!=='—'?' — '+i.roast:''):'(محذوف)';
+function setRole(v){if(v==='m'&&role!=='m'){if(prompt('الرقم السري للمدير')!==db.pin){$('#role').value=role;return}}role=v;if(!isM()&&['rep','items','log','set'].includes(view))view='dash';nav();go(view)}
+const tabs=[['dash','الرئيسية'],['new','فاتورة جديدة'],['inv','الفواتير'],['rep','التقارير',1],['items','الأصناف',1],['stock','المخزون'],['log','السجل',1],['set','الإعدادات',1]];
+function nav(){$('#nav').innerHTML=tabs.filter(t=>!t[2]||isM()).map(t=>`<button class="${view===t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('')}
+function go(v,arg){view=v;if(v==='new')cur=arg||blank();nav();({dash,new:form,inv:invList,rep:reports,items:items,stock:stock,log:logv,set:settings})[v]();scrollTo(0,0)}
+const out=h=>$('#app').innerHTML=h;
+/* ---- calc ---- */
+function calcLine(l){const q=+l.qty||0,it=item(l.item);const cost=l.snap&&l.snap.item==l.item&&l.snap.qty==q?l.snap.cost:(it?it.cost:0);
+ const bean=R(q*cost),pack=R(q*PACK),gross=R(q*(+l.price||0)),disc=+l.disc||0;return{q,bean,pack,gross,disc,net:R(gross-disc),cost:R(bean+pack),profit:R(gross-disc-bean-pack),costKg:cost}}
+function calcInv(inv){const t={gross:0,disc:0,bean:0,pack:0,qty:0};inv.lines.forEach(l=>{const c=calcLine(l);t.gross+=c.gross;t.disc+=c.disc;t.bean+=c.bean;t.pack+=c.pack;t.qty+=c.q});
+ t.net=R(t.gross-t.disc);t.cost=R(t.bean+t.pack);t.profit=R(t.net-t.cost);t.margin=t.net?t.profit/t.net*100:0;return t}
+function applyStock(lines,sign){lines.forEach(l=>{const it=item(l.item);if(it)it.stock=R((it.stock||0)+sign*(+l.qty||0))})}
+/* ---- invoice form ---- */
+const blank=()=>({id:null,no:db.next,date:today(),customer:'',phone:'',pay:'نقدي',lines:[{item:db.items.find(i=>i.active)?.id,qty:1,price:0,disc:0}]});
+function form(){const o=db.items.filter(i=>i.active).map(i=>`<option value="${i.id}">${iname(i)}</option>`).join('');window._opts=o;
+ out(`<div class="card"><h3>${cur.id?'تعديل فاتورة رقم '+cur.no:'فاتورة جديدة رقم '+cur.no}</h3>
+ <div class="row"><div>التاريخ<input type="date" value="${cur.date}" onchange="cur.date=this.value"></div>
+ <div>اسم العميل<input value="${cur.customer}" oninput="cur.customer=this.value"></div>
+ <div>الهاتف (اختياري)<input value="${cur.phone}" oninput="cur.phone=this.value"></div>
+ <div>طريقة الدفع<select onchange="cur.pay=this.value">${['نقدي','تحويل','محفظة','آجل'].map(p=>`<option ${p==cur.pay?'selected':''}>${p}</option>`).join('')}</select></div></div>
+ <div class="tw"><table><thead><tr><th>الصنف / التحميص</th><th>الكمية (كجم)</th><th>سعر الكيلو</th><th>خصم (ج)</th><th>إجمالي السطر</th>${isM()?'<th>التكلفة</th><th>الربح</th>':''}<th></th></tr></thead><tbody id="lines"></tbody></table></div>
+ <p><button class="btn s" onclick="addLine()">+ إضافة صنف</button> <span class="mut">الكمية: 0.125 / 0.25 / 0.5 / 1 كجم أو أي رقم</span></p>
+ <div class="grid" id="sum"></div>
+ <p><button class="btn" onclick="saveInv()">حفظ الفاتورة</button> <button class="btn s" onclick="go('inv')">إلغاء</button></p></div>`);drawLines()}
+function drawLines(){$('#lines').innerHTML=cur.lines.map((l,i)=>`<tr><td><select onchange="setL(${i},'item',this.value,1)">${window._opts.replace(`value="${l.item}"`,`value="${l.item}" selected`)}</select></td>
+ <td><input type="number" step="0.001" min="0" value="${l.qty}" oninput="setL(${i},'qty',this.value)"></td>
+ <td><input type="number" step="0.01" min="0" value="${l.price}" oninput="setL(${i},'price',this.value)"></td>
+ <td><input type="number" step="0.01" min="0" value="${l.disc}" oninput="setL(${i},'disc',this.value)"></td>
+ <td id="n${i}"></td>${isM()?`<td id="c${i}"></td><td id="p${i}"></td>`:''}<td><button class="btn d" onclick="delLine(${i})">✕</button></td></tr>`).join('');
+ cur.lines.forEach((l,i)=>{if(!l.price&&!l.priceSet){const it=item(l.item);l.price=it?it.price:0;const inp=$('#lines').rows[i].cells[2].firstChild;inp.value=l.price}});upd()}
+function setL(i,k,v,redraw){const l=cur.lines[i];l[k]=k==='item'?+v:v;if(k==='item'){const it=item(v);l.price=it?it.price:0;l.snap=null;drawLines();return}if(k==='price')l.priceSet=1;upd()}
+function addLine(){const f=db.items.find(i=>i.active);cur.lines.push({item:f&&f.id,qty:1,price:f?f.price:0,disc:0});drawLines()}
+function delLine(i){if(cur.lines.length>1){cur.lines.splice(i,1);drawLines()}}
+function upd(){cur.lines.forEach((l,i)=>{const c=calcLine(l);$('#n'+i).textContent=F(c.net);if(isM()){$('#c'+i).textContent=F(c.cost);const p=$('#p'+i);p.textContent=F(c.profit);p.className=c.profit<0?'neg':'pos'}});
+ const t=calcInv(cur);$('#sum').innerHTML=`<div class="k"><small>إجمالي الفاتورة</small><div>${F(t.net)}</div></div><div class="k"><small>الخصومات</small><div>${F(t.disc)}</div></div>`+(isM()?`<div class="k"><small>تكلفة البن</small><div>${F(t.bean)}</div></div><div class="k"><small>تكلفة التعبئة</small><div>${F(t.pack)}</div></div><div class="k"><small>إجمالي التكلفة</small><div>${F(t.cost)}</div></div><div class="k"><small>صافي الربح المتوقع</small><div class="${t.profit<0?'neg':'pos'}">${F(t.profit)}</div></div><div class="k"><small>هامش الربح</small><div>${F(t.margin)}%</div></div>`:'')}
+function saveInv(){if(!cur.lines.length||cur.lines.some(l=>!l.item||!(+l.qty>0))){alert('تأكد من الصنف والكمية');return}
+ if(!cur.customer.trim()&&!confirm('بدون اسم عميل. متابعة؟'))return;
+ const lines=cur.lines.map(l=>{const c=calcLine(l);return{item:+l.item,qty:+l.qty,price:+l.price||0,disc:+l.disc||0,snap:{item:+l.item,qty:+l.qty,cost:c.costKg}}});
+ const rec={no:cur.no,date:cur.date,customer:cur.customer.trim(),phone:cur.phone,pay:cur.pay,lines};
+ if(cur.id){const old=db.invoices.find(x=>x.no===cur.no);applyStock(old.lines,+1);applyStock(lines,-1);
+  const a=calcInv(old),b=calcInv(rec);Object.assign(old,rec,{edited:new Date().toISOString()});
+  logit('تعديل فاتورة',cur.no,`الإجمالي ${F(a.net)}→${F(b.net)} | الربح ${F(a.profit)}→${F(b.profit)}`)}
+ else{db.invoices.push(rec);db.next=Math.max(db.next,rec.no+1);applyStock(lines,-1);logit('إنشاء فاتورة',rec.no,`الإجمالي ${F(calcInv(rec).net)}`)}
+ save();printInv(rec.no,1);go('inv')}
+/* ---- invoices list ---- */
+function match(v){const q=flt.q.trim();const it=v.lines.map(l=>item(l.item));
+ return(!q||String(v.no)==q||(v.customer||'').includes(q)||(v.phone||'').includes(q)||it.some(i=>i&&i.name.includes(q))||v.date.includes(q))&&(!flt.item||it.some(i=>i&&i.name===flt.item))&&(!flt.roast||it.some(i=>i&&i.roast===flt.roast))&&(!flt.pay||v.pay===flt.pay)&&(!flt.d1||v.date>=flt.d1)&&(!flt.d2||v.date<=flt.d2)}
+function invList(){const names=[...new Set(db.items.map(i=>i.name))];
+ const rows=db.invoices.filter(match).sort((a,b)=>b.no-a.no).map(v=>{const t=calcInv(v);return`<tr><td>${v.no}</td><td>${v.date}</td><td>${v.customer||'-'}</td><td>${F(t.net)}</td>${isM()?`<td>${F(t.cost)}</td><td class="${t.profit<0?'neg':'pos'}">${F(t.profit)}</td>`:''}<td>${v.pay}</td><td>${(isM()||db.staffEdit)?`<button class="btn s" onclick="go('new',editCopy(${v.no}))">تعديل</button> `:''}<button class="btn s" onclick="printInv(${v.no})">طباعة</button>${isM()?` <button class="btn d" onclick="delInv(${v.no})">حذف</button>`:''}</td></tr>`}).join('');
+ out(`<div class="card"><div class="row"><input placeholder="بحث: رقم فاتورة / عميل / هاتف / صنف / تاريخ" value="${flt.q}" oninput="flt.q=this.value;clearTimeout(window._t);window._t=setTimeout(invList,300)">
+ <select onchange="flt.item=this.value;invList()"><option value="">كل الأصناف</option>${names.map(n=>`<option ${n===flt.item?'selected':''}>${n}</option>`).join('')}</select>
+ <select onchange="flt.roast=this.value;invList()"><option value="">كل التحميص</option>${['فاتح','وسط','غامق'].map(n=>`<option ${n===flt.roast?'selected':''}>${n}</option>`).join('')}</select>
+ <select onchange="flt.pay=this.value;invList()"><option value="">كل طرق الدفع</option>${['نقدي','تحويل','محفظة','آجل'].map(n=>`<option ${n===flt.pay?'selected':''}>${n}</option>`).join('')}</select>
+ <input type="date" value="${flt.d1}" onchange="flt.d1=this.value;invList()"><input type="date" value="${flt.d2}" onchange="flt.d2=this.value;invList()"></div>
+ <div class="tw"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>إجمالي البيع</th>${isM()?'<th>التكلفة</th><th>الربح</th>':''}<th>الدفع</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan=8 class=mut>لا توجد فواتير</td></tr>'}</tbody></table></div>
+ ${isM()?'<p><button class="btn s" onclick="csv()">تصدير CSV</button></p>':''}</div>`)}
+function editCopy(no){const v=db.invoices.find(x=>x.no===no);return JSON.parse(JSON.stringify({...v,id:no,lines:v.lines.map(l=>({...l,priceSet:1}))}))}
+function delInv(no){if(!confirm('حذف الفاتورة رقم '+no+' نهائيًا؟ سيتم إرجاع الكمية للمخزون.'))return;const i=db.invoices.findIndex(x=>x.no===no),v=db.invoices[i];applyStock(v.lines,+1);db.invoices.splice(i,1);logit('حذف فاتورة',no,`كانت بإجمالي ${F(calcInv(v).net)} للعميل ${v.customer||'-'}`);invList()}
+function printInv(no,ask){const v=db.invoices.find(x=>x.no===no);if(ask&&!confirm('تم الحفظ. طباعة الفاتورة؟'))return;const t=calcInv(v);
+ $('#print').innerHTML=`<div style="text-align:center"><h1 style="margin:0;letter-spacing:4px">MOKATO</h1><div>Mokato Coffee</div></div><hr><p>فاتورة رقم: <b>${v.no}</b> &nbsp; التاريخ: ${v.date}<br>العميل: ${v.customer||'-'} ${v.phone?' — '+v.phone:''}<br>طريقة الدفع: ${v.pay}</p>
+ <table><thead><tr><th>الصنف</th><th>التحميص</th><th>الكمية</th><th>السعر/كجم</th><th>خصم</th><th>الإجمالي</th></tr></thead><tbody>${v.lines.map(l=>{const it=item(l.item),c=calcLine(l);return`<tr><td>${it?it.name:''}</td><td>${it?it.roast:''}</td><td>${l.qty} كجم</td><td>${F(l.price)}</td><td>${F(l.disc)}</td><td>${F(c.net)}</td></tr>`}).join('')}</tbody></table>
+ <h3>الإجمالي: ${F(t.net)} جنيه</h3><hr><p style="text-align:center">واتساب 01501005003 — www.mokatocoffee.store</p>`;window.print()}
+/* ---- reports ---- */
+function range(){const d=new Date(),f=x=>x.toISOString().slice(0,10),t=today();let a=t,b=t;
+ if(rep.p==='yes'){const y=new Date(d-864e5);a=b=f(y)}else if(rep.p==='week'){const s=new Date(d);s.setDate(d.getDate()-((d.getDay()+1)%7));a=f(s)}
+ else if(rep.p==='month')a=t.slice(0,8)+'01';else if(rep.p==='prev'){a=f(new Date(d.getFullYear(),d.getMonth()-1,2));a=a.slice(0,8)+'01';b=f(new Date(d.getFullYear(),d.getMonth(),1));b=f(new Date(new Date(b)-864e5))}
+ else if(rep.p==='cus'){a=rep.from||'0000';b=rep.to||'9999'}return[a,b]}
+function agg(invs,keyFn){const m={};invs.forEach(v=>v.lines.forEach(l=>{const c=calcLine(l),k=keyFn(v,l);const o=m[k]||(m[k]={qty:0,sales:0,bean:0,pack:0,disc:0,inv:new Set()});o.qty+=c.q;o.sales+=c.gross;o.bean+=c.bean;o.pack+=c.pack;o.disc+=c.disc;o.inv.add(v.no)}));
+ return Object.entries(m).map(([k,o])=>{const net=R(o.sales-o.disc),cost=R(o.bean+o.pack),pr=R(net-cost);return{k,qty:o.qty,sales:net,bean:o.bean,pack:o.pack,cost,disc:o.disc,profit:pr,margin:net?pr/net*100:0,n:o.inv.size}})}
+function tbl(rows,first){return`<div class="tw"><table><thead><tr><th>${first}</th><th>فواتير</th><th>الكمية</th><th>المبيعات</th><th>تكلفة البن</th><th>التعبئة</th><th>التكلفة</th><th>الربح</th><th>الهامش%</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.k}</td><td>${r.n}</td><td>${F(r.qty)}</td><td>${F(r.sales)}</td><td>${F(r.bean)}</td><td>${F(r.pack)}</td><td>${F(r.cost)}</td><td class="${r.profit<0?'neg':'pos'}">${F(r.profit)}</td><td>${F(r.margin)}</td></tr>`).join('')||'<tr><td colspan=9 class=mut>لا بيانات</td></tr>'}</tbody></table></div>`}
+function reports(){const[a,b]=range(),invs=db.invoices.filter(v=>v.date>=a&&v.date<=b);let T={gross:0,disc:0,bean:0,pack:0,qty:0};invs.forEach(v=>{const t=calcInv(v);for(const k in T)T[k]+=t[k]});
+ const net=R(T.gross-T.disc),cost=R(T.bean+T.pack),pr=R(net-cost),srt=r=>r.sort((x,y)=>y.profit-x.profit);
+ const P=[['today','اليوم'],['yes','أمس'],['week','هذا الأسبوع'],['month','هذا الشهر'],['prev','الشهر السابق'],['cus','فترة مخصصة']];
+ out(`<div class="card"><div class="row"><select onchange="rep.p=this.value;reports()">${P.map(p=>`<option value="${p[0]}" ${rep.p==p[0]?'selected':''}>${p[1]}</option>`).join('')}</select>
+ ${rep.p==='cus'?`<input type="date" value="${rep.from}" onchange="rep.from=this.value;reports()"><input type="date" value="${rep.to}" onchange="rep.to=this.value;reports()">`:''}<button class="btn s" onclick="window.print2()">طباعة / PDF</button></div>
+ <div class="grid">${[['إجمالي المبيعات',net],['عدد الفواتير',invs.length,1],['الكمية المباعة (كجم)',T.qty],['متوسط الفاتورة',invs.length?net/invs.length:0],['تكلفة البن',T.bean],['تكلفة التعبئة',T.pack],['إجمالي التكلفة',cost],['الخصومات',T.disc],['صافي الربح',pr],['هامش الربح %',net?pr/net*100:0]].map(x=>`<div class="k"><small>${x[0]}</small><div>${x[2]?x[1]:F(x[1])}</div></div>`).join('')}</div></div>
+ <div class="card"><h3>ربحية الأصناف</h3>${tbl(srt(agg(invs,(v,l)=>iname(item(l.item)))),'الصنف / التحميص')}</div>
+ <div class="card"><h3>حسب التحميص</h3>${tbl(agg(invs,(v,l)=>item(l.item)?item(l.item).roast:'-'),'التحميص')}</div>
+ <div class="card"><h3>حسب اليوم</h3>${tbl(agg(invs,v=>v.date).sort((x,y)=>y.k>x.k?1:-1),'اليوم')}</div>
+ <div class="card"><h3>حسب الشهر</h3>${tbl(agg(invs,v=>v.date.slice(0,7)).sort((x,y)=>y.k>x.k?1:-1),'الشهر')}</div>
+ <div class="card"><h3>حسب العميل</h3>${tbl(srt(agg(invs,v=>v.customer||'بدون اسم')),'العميل')}</div>
+ <div class="card"><h3>حسب طريقة الدفع</h3>${tbl(agg(invs,v=>v.pay),'الدفع')}</div>`)}
+window.print2=()=>{$('#print').innerHTML='<h2>MOKATO — تقرير</h2>'+$('#app').innerHTML;window.print()};
+/* ---- dashboard ---- */
+function dash(){const t=today(),m=t.slice(0,7),sum=f=>{const o={net:0,cost:0,profit:0,n:0};db.invoices.filter(f).forEach(v=>{const c=calcInv(v);o.net+=c.net;o.cost+=c.cost;o.profit+=c.profit;o.n++});return o};
+ const D=sum(v=>v.date===t),M=sum(v=>v.date.startsWith(m)),days=[];for(let i=13;i>=0;i--){const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10);const s=sum(v=>v.date===d);days.push([d.slice(8),s.net,s.profit])}
+ const mx=Math.max(1,...days.map(d=>d[1])),inv=db.invoices.filter(v=>v.date.startsWith(m)),ag=agg(inv,(v,l)=>iname(item(l.item)));
+ const top=(r,k)=>r.sort((x,y)=>y[k]-x[k]).slice(0,5).map(x=>`<tr><td>${x.k}</td><td>${F(x[k])}</td></tr>`).join('')||'<tr><td class=mut>لا بيانات</td></tr>';
+ const K=(l,v)=>`<div class="k"><small>${l}</small><div>${v}</div></div>`;
+ out(`<div class="grid">${K('مبيعات اليوم',F(D.net))}${isM()?K('تكلفة اليوم',F(D.cost))+K('أرباح اليوم',F(D.profit)):''}${K('فواتير اليوم',D.n)}${K('مبيعات الشهر',F(M.net))}${isM()?K('تكلفة الشهر',F(M.cost))+K('أرباح الشهر',F(M.profit))+K('هامش الربح',F(M.net?M.profit/M.net*100:0)+'%'):''}</div><br>
+ <div class="card"><h3>المبيعات اليومية (14 يومًا)</h3><div class="bar">${days.map(d=>`<i style="height:${d[1]/mx*100}%" title="${F(d[1])}"></i>`).join('')}</div><div class="lab">${days.map(d=>`<span>${d[0]}</span>`).join('')}</div></div>
+ ${isM()?`<div class="card"><h3>الأرباح اليومية</h3><div class="bar">${days.map(d=>`<i class="p" style="height:${Math.max(0,d[2])/mx*100}%" title="${F(d[2])}"></i>`).join('')}</div></div>`:''}
+ <div class="grid"><div class="card"><h3>الأكثر مبيعًا (الشهر)</h3><table style="min-width:0">${top(ag,'sales')}</table></div>${isM()?`<div class="card"><h3>الأكثر ربحًا (الشهر)</h3><table style="min-width:0">${top(ag,'profit')}</table></div>`:''}</div>`)}
+/* ---- items ---- */
+function items(){out(`<div class="card"><h3>الأصناف والتكاليف</h3><p class="mut">تكلفة التعبئة ثابتة: ${PACK} جنيه/كجم وتُضاف تلقائيًا. تعديل التكلفة لا يغير سعر البيع، ولا يغير الفواتير المحفوظة إلا إذا عُدّل بندها.</p><div class="tw"><table><thead><tr><th>الصنف</th><th>التحميص</th><th>تكلفة الكيلو</th><th>سعر البيع/كجم</th><th>الوحدة</th><th>نشط</th><th>آخر تعديل</th></tr></thead><tbody>${db.items.map(i=>`<tr><td><input value="${i.name}" onchange="ed(${i.id},'name',this.value)"></td><td><input value="${i.roast}" onchange="ed(${i.id},'roast',this.value)"></td><td><input type="number" step="0.01" value="${i.cost}" onchange="ed(${i.id},'cost',this.value)"></td><td><input type="number" step="0.01" value="${i.price}" onchange="ed(${i.id},'price',this.value)"></td><td>${i.unit}</td><td><input type="checkbox" ${i.active?'checked':''} onchange="ed(${i.id},'active',this.checked)" style="width:auto"></td><td>${i.updated.slice(0,10)}</td></tr>`).join('')}</tbody></table></div><p><button class="btn" onclick="addItem()">+ صنف جديد</button></p></div>`)}
+function ed(id,k,v){const i=item(id),old=i[k];i[k]=['cost','price'].includes(k)?+v:v;i.updated=new Date().toISOString();logit(k==='cost'?'تعديل تكلفة':k==='price'?'تعديل سعر':'تعديل صنف','-',`${iname(i)}: ${k} ${old}→${i[k]}`)}
+function addItem(){const t=new Date().toISOString();const i={id:Math.max(...db.items.map(x=>x.id))+1,name:'صنف جديد',roast:'—',cost:0,price:0,unit:'كجم',active:true,created:t,updated:t,stock:0};db.items.push(i);logit('تعديل صنف','-','إضافة صنف جديد');items()}
+/* ---- stock ---- */
+function stock(){const sold={};db.invoices.forEach(v=>v.lines.forEach(l=>sold[l.item]=R((sold[l.item]||0)+l.qty)));
+ out(`<div class="card"><h3>رصيد المخزون (كجم)</h3><p class="mut">يُخصم تلقائيًا عند البيع، ويُعدَّل بالفرق عند تعديل الفاتورة، ويرجع عند الحذف. أضف الوارد من العمود الأخير.</p><div class="tw"><table><thead><tr><th>الصنف</th><th>المباع</th><th>الرصيد المتبقي</th>${isM()?'<th>إضافة وارد (كجم)</th>':''}</tr></thead><tbody>${db.items.map(i=>`<tr><td>${iname(i)}</td><td>${F(sold[i.id]||0)}</td><td class="${i.stock<0?'neg':''}">${F(i.stock)}</td>${isM()?`<td><input type="number" step="0.001" placeholder="0" onchange="addStock(${i.id},this.value)"></td>`:''}</tr>`).join('')}</tbody></table></div></div>
+ <div class="card"><h3>حركة المخزون</h3>${db.log.filter(x=>x.type==='وارد مخزون').slice(0,20).map(x=>`<div>${x.t.slice(0,10)} — ${x.detail}</div>`).join('')||'<span class="mut">لا حركات واردة</span>'}</div>`)}
+function addStock(id,v){v=+v;if(!v)return;const i=item(id);i.stock=R(i.stock+v);logit('وارد مخزون','-',`${iname(i)}: +${v} كجم`);stock()}
+/* ---- log / settings ---- */
+function logv(){out(`<div class="card"><h3>سجل العمليات</h3><div class="tw"><table><thead><tr><th>الوقت</th><th>العملية</th><th>فاتورة</th><th>التفاصيل</th></tr></thead><tbody>${db.log.slice(0,300).map(x=>`<tr><td>${x.t.slice(0,16).replace('T',' ')}</td><td>${x.type}</td><td>${x.no}</td><td style="white-space:normal">${x.detail}</td></tr>`).join('')||'<tr><td class=mut>لا عمليات</td></tr>'}</tbody></table></div></div>`)}
+function settings(){out(`<div class="card"><h3>الإعدادات</h3><div class="row"><div>الرقم السري للمدير<input value="${db.pin}" onchange="db.pin=this.value;save()"></div><div>السماح للموظف بتعديل الفواتير<select onchange="db.staffEdit=this.value==='1';save()"><option value="0">لا</option><option value="1" ${db.staffEdit?'selected':''}>نعم</option></select></div></div>
+ <p><button class="btn" onclick="backup()">نسخ احتياطي</button> <label class="btn s" style="display:inline-block;cursor:pointer">استعادة نسخة<input type="file" accept=".json" style="display:none" onchange="restore(this.files[0])"></label> <button class="btn s" onclick="csv()">تصدير الفواتير CSV</button></p>
+ <p class="mut">البيانات محفوظة في هذا المتصفح فقط. خذ نسخة احتياطية بانتظام. لا يوجد خادم أو مزامنة بين الأجهزة.</p></div>`)}
+function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click()}
+function backup(){dl('mokato-backup-'+today()+'.json',JSON.stringify(db),'application/json')}
+function restore(f){if(!f||!confirm('سيتم استبدال كل البيانات الحالية. متابعة؟'))return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.items||!d.invoices)throw 0;db=d;save();alert('تمت الاستعادة');go('dash')}catch(e){alert('ملف غير صالح')}};r.readAsText(f)}
+function csv(){const L=['رقم,التاريخ,العميل,الهاتف,الدفع,الصنف,الكمية,سعر الكيلو,خصم,المبيعات,تكلفة البن,التعبئة,الربح'];db.invoices.forEach(v=>v.lines.forEach(l=>{const c=calcLine(l);L.push([v.no,v.date,v.customer,v.phone,v.pay,iname(item(l.item)),l.qty,l.price,l.disc,c.net,c.bean,c.pack,c.profit].map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(','))}));dl('mokato-invoices.csv','\ufeff'+L.join('\n'),'text/csv')}
+nav();go('dash');
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
