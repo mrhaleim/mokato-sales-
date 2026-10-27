@@ -18,12 +18,19 @@
   paidLabel.textContent = 'المدفوع (ج.م)';
   const baseReceipt = receipt;
   receipt = function (r) {
-    let html = baseReceipt(r);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = baseReceipt(r);
+    const totals = wrapper.querySelector('.tot');
+    const grand = totals && totals.querySelector('.grand');
+    if (grand) while (grand.nextElementSibling) grand.nextElementSibling.remove();
+    const total = tot(r).total, paid = Number(r.pd) || 0, due = Math.max(total - paid, 0);
     const mode = r.py || method.value || paymentLabel(r);
-    const due = tot(r).rem;
-    const line = '<div class="meta"><span>طريقة الدفع</span><b>' + (mode === 'credit' ? 'آجل' : 'نقدي') + '</b></div>' +
-      '<div class="meta"><span>' + (due > 0 ? 'المتبقي على العميل' : 'حالة الفاتورة') + '</span><b>' + (due > 0 ? money(due) + ' ج.م' : 'مدفوعة بالكامل') + '</b></div>';
-    return html.replace('<div class="dash"></div><div class="c" style="font-weight:800">شكرًا', line + '<div class="dash"></div><div class="c" style="font-weight:800">شكرًا');
+    const state = due <= 0 ? 'مدفوعة بالكامل' : paid > 0 ? 'مدفوعة جزئيًا' : 'غير مدفوعة';
+    const rows = '<div class="meta"><span>طريقة الدفع</span><b>' + (mode === 'credit' ? 'آجل' : 'نقدي') + '</b></div>' +
+      '<div class="meta"><span>حالة الفاتورة</span><b>' + state + '</b></div>' +
+      (paid > 0 && due > 0 ? '<div class="meta"><span>المدفوع</span><b>' + money(paid) + ' ج.م</b></div><div class="meta"><span>الباقي</span><b>' + money(due) + ' ج.م</b></div>' : '');
+    if (totals) totals.insertAdjacentHTML('beforeend', rows);
+    return wrapper.innerHTML;
   };
   const baseDraw = draw;
   draw = function () {
@@ -108,6 +115,10 @@
     else { const index = INV.findIndex((item) => item.no === r.no); if (index >= 0) INV[index] = r; else INV.unshift(r); }
     editTm = r.tm; save(); draw(); await snap(r);
   };
+  const closeInvoice = () => { $('modal').classList.remove('on'); show('new'); };
+  if (window.MokatoNative?.App) window.MokatoNative.App.addListener('backButton', () => {
+    if ($('modal').classList.contains('on')) closeInvoice();
+  });
   const nativeShare = async (fileName, blob, title, text) => {
     const native = window.MokatoNative;
     if (native && native.Capacitor.isNativePlatform()) {
@@ -131,16 +142,17 @@
     const message = $('msg'); message.textContent = '';
     try {
       const fileName = 'invoice-' + $('out').dataset.no + '.png';
-      if (await nativeShare(fileName, blob, 'فاتورة مبيعات موكاتو', 'فاتورة رقم ' + $('out').dataset.no)) { message.textContent = 'اختار WhatsApp للإرسال أو تطبيقًا مناسبًا للحفظ.'; return; }
+      if (await nativeShare(fileName, blob, 'فاتورة مبيعات موكاتو', 'فاتورة رقم ' + $('out').dataset.no)) { closeInvoice(); return; }
       fallbackDownload(fileName, blob); message.textContent = 'تم تجهيز الصورة. لو لم تظهر في التنزيلات، اضغط مطولًا عليها واختر حفظ الصورة.';
-    } catch (error) { message.textContent = 'تعذر فتح المشاركة. اضغط مطولًا على الصورة لحفظها.'; }
+    } catch (error) { if (error?.name === 'AbortError') closeInvoice(); else message.textContent = 'تعذر فتح المشاركة. اضغط مطولًا على الصورة لحفظها.'; }
   };
   $('sh').onclick = async () => {
     const message = $('msg'); message.textContent = '';
     try {
       const fileName = 'invoice-' + $('out').dataset.no + '.png';
-      if (!(await nativeShare(fileName, blob, 'فاتورة مبيعات موكاتو', 'فاتورة رقم ' + $('out').dataset.no))) { message.textContent = 'المشاركة غير مدعومة في هذا المتصفح؛ استخدم زر حفظ الصورة.'; }
-    } catch (error) { message.textContent = 'تعذر فتح قائمة المشاركة. جرب حفظ الصورة أولًا.'; }
+      if (await nativeShare(fileName, blob, 'فاتورة مبيعات موكاتو', 'فاتورة رقم ' + $('out').dataset.no)) closeInvoice();
+      else message.textContent = 'المشاركة غير مدعومة في هذا المتصفح؛ استخدم زر حفظ الصورة.';
+    } catch (error) { if (error?.name === 'AbortError') closeInvoice(); else message.textContent = 'تعذر فتح قائمة المشاركة. جرب حفظ الصورة أولًا.'; }
   };
   $('bj').onclick = async () => {
     const data = new Blob([JSON.stringify({ P, PK, INV, CNT }, null, 2)], { type: 'application/json;charset=utf-8' });
