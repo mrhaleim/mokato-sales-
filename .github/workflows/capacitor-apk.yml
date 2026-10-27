@@ -34,7 +34,7 @@ jobs:
           node-version: '24'
 
       - name: Install Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Prepare Capacitor project
         shell: bash
