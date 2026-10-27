@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/capacitor-apk.yml'
       - 'index.html'
+      - 'enhancements.js'
+      - 'native-bridge-entry.js'
       - 'manifest.json'
       - 'sw.js'
       - 'icon-192.png'
@@ -21,26 +23,23 @@ jobs:
     steps:
       - name: Check out the app
         uses: actions/checkout@v4
-
       - name: Install Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-
       - name: Install Android SDK
         uses: android-actions/setup-android@v4
-
       - name: Prepare Capacitor project
         shell: bash
         run: |
           mkdir -p mobile/www
-          cp index.html manifest.json sw.js icon-192.png icon-512.png mobile/www/
+          cp index.html enhancements.js manifest.json sw.js icon-192.png icon-512.png mobile/www/
+          cp native-bridge-entry.js mobile/
           cat > mobile/package.json <<'EOF'
           {
             "name": "mokato-sales-capacitor",
@@ -48,10 +47,13 @@ jobs:
             "private": true,
             "dependencies": {
               "@capacitor/android": "^8.0.0",
-              "@capacitor/core": "^8.0.0"
+              "@capacitor/core": "^8.0.0",
+              "@capacitor/filesystem": "^8.0.0",
+              "@capacitor/share": "^8.0.0"
             },
             "devDependencies": {
-              "@capacitor/cli": "^8.0.0"
+              "@capacitor/cli": "^8.0.0",
+              "esbuild": "^0.25.0"
             }
           }
           EOF
@@ -60,28 +62,24 @@ jobs:
             "appId": "com.mokato.sales",
             "appName": "مبيعات موكاتو",
             "webDir": "www",
-            "server": {
-              "androidScheme": "https"
-            }
+            "server": { "androidScheme": "https" }
           }
           EOF
-
       - name: Install Capacitor dependencies
         working-directory: mobile
         run: npm install
-
+      - name: Bundle native share bridge
+        working-directory: mobile
+        run: npx esbuild native-bridge-entry.js --bundle --format=iife --outfile=www/native-bridge.js
       - name: Generate Android project
         working-directory: mobile
         run: npx cap add android
-
       - name: Sync web app into Android project
         working-directory: mobile
         run: npx cap sync android
-
       - name: Build debug APK
         working-directory: mobile/android
         run: ./gradlew assembleDebug
-
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
