@@ -1,5 +1,4 @@
 name: Build Android APK with Capacitor
-
 on:
   push:
     branches: [main]
@@ -13,10 +12,8 @@ on:
       - 'icon-192.png'
       - 'icon-512.png'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -65,6 +62,17 @@ jobs:
             "server": { "androidScheme": "https" }
           }
           EOF
+      - name: Repair the invoice renderer template
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          page = Path('mobile/www/index.html')
+          html = page.read_text(encoding='utf-8')
+          broken = '''<html><script src="native-bridge.js"></script><script src="enhancements.js"></script></body></html>'''
+          if html.count(broken) != 1:
+              raise SystemExit('Expected one misplaced script fragment in html2canvas template')
+          page.write_text(html.replace(broken, '<html></html>', 1), encoding='utf-8')
+          PY
       - name: Install Capacitor dependencies
         working-directory: mobile
         run: npm install
